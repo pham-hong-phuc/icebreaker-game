@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Icebreaker Q&A Game</title>
+<style>
+  body {
+    margin:0;
+    font-family:sans-serif;
+    background: linear-gradient(180deg, #012a4a, #014f86, #2a6f97);
+    color:#fff;
+    overflow:hidden;
+  }
+  canvas {
+    width:100vw;
+    height:100vh;
+    background:#014f86;
+    display:block;
+  }
+  .overlay {
+    position:absolute;
+    inset:0;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    background:rgba(0,0,0,0.75);
+  }
+  .card {
+    width:80vw;
+    max-width:700px;
+    min-height:60vh;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    background:#022b3a;
+    text-align:center;
+    font-size:1.8rem;
+    padding:30px;
+    border-radius:30px;
+    box-shadow:0 0 25px rgba(0,255,255,0.4);
+  }
+  .options {
+    display:flex;
+    flex-direction:column;
+    gap:20px;
+    margin-top:20px;
+    width:100%;
+  }
+  button {
+    padding:15px;
+    font-size:1.5rem;
+    border:none;
+    border-radius:15px;
+    background:#3a8141;
+    color:#fff;
+    cursor:pointer;
+    font-weight:bold;
+    transition:0.2s;
+  }
+  button:hover { background:#4da15a; transform:scale(1.05); }
+  h1,h2 { margin:0 0 20px; font-size:2.2rem; }
+  .emoji { font-size:80px; margin-bottom:20px; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="overlay" class="overlay" style="display:none;">
+  <div class="card" id="card"></div>
+</div>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const card = document.getElementById('card');
+
+// Resize canvas
+function resizeCanvas(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+// Nhân vật 🗑️ (to hơn)
+const player = {x:window.innerWidth/2, y:window.innerHeight-120, r:50, speed:8, size:100};
+
+function drawBasket(x,y,size){
+  ctx.font = `${size}px serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("🗑️", x, y);
+}
+
+// Danh sách quà 🎁 (to hơn)
+let balls;
+function initBalls(){
+  balls = [];
+  for (let i=0;i<5;i++){
+    balls.push({x:Math.random()*canvas.width, y:-120*i-100, r:40, active:true});
+  }
+}
+initBalls();
+
+let currentBall = 0;
+let score = 0;
+let inQuestion = false;
+let gameOver = false;
+
+const questions = [
+  { q:"Câu hỏi 1?", options:["A","B","C"], correct:0 },
+  { q:"Câu hỏi 2?", options:["Đáp án 1","Đáp án 2","Đáp án 3"], correct:1 },
+  { q:"Câu hỏi 3?", options:["Lựa chọn A","Lựa chọn B","Lựa chọn C"], correct:2 },
+  { q:"Câu hỏi 4?", options:["X","Y","Z"], correct:0 },
+  { q:"Câu hỏi 5?", options:["1","2","3"], correct:1 }
+];
+
+const gifts = [
+  "🎁 Một chiếc kẹo ngọt ngào",
+  "🎁 Một ly trà sữa mát lạnh",
+  "🎁 Một vé xem phim miễn phí",
+  "🎁 Một cái ôm ấm áp",
+  "🎁 Một lời chúc may mắn"
+];
+
+// Điều khiển
+let keys = {};
+window.addEventListener('keydown', e=>keys[e.key]=true);
+window.addEventListener('keyup', e=>keys[e.key]=false);
+
+// Confetti
+let confetti = [];
+function spawnConfetti(){
+  confetti = [];
+  for(let i=0;i<150;i++){
+    confetti.push({
+      x: Math.random()*canvas.width,
+      y: Math.random()*canvas.height,
+      r: 6,
+      dx: (Math.random()-0.5)*5,
+      dy: Math.random()*4+2,
+      color: `hsl(${Math.random()*360},100%,50%)`
+    });
+  }
+}
+function drawConfetti(){
+  confetti.forEach(c=>{
+    ctx.fillStyle=c.color;
+    ctx.fillRect(c.x,c.y,c.r,c.r);
+    c.x+=c.dx;
+    c.y+=c.dy;
+  });
+  confetti = confetti.filter(c=>c.y<canvas.height);
+}
+
+function showQuestion(i){
+  inQuestion=true;
+  overlay.style.display='flex';
+  const q=questions[i];
+  card.innerHTML = `<h2>${q.q}</h2><div class="options"></div>`;
+  const optDiv=card.querySelector('.options');
+  q.options.forEach((op,idx)=>{
+    const btn=document.createElement('button');
+    btn.textContent=op;
+    btn.onclick=()=>{
+      overlay.style.display='flex';
+      if(idx===q.correct){
+        score+=2;
+        const gift = gifts[currentBall] || "🎁 Một phần quà bí ẩn!";
+        card.innerHTML = `
+          <div class="emoji">😊</div>
+          <h2>Đúng rồi! +2 điểm</h2>
+          <p>Bạn nhận được: <b>${gift}</b></p>
+        `;
+        spawnConfetti();
+      }else{
+        card.innerHTML = `<div class="emoji">😢</div><h2>Sai mất rồi!</h2>`;
+      }
+      setTimeout(()=>{
+        overlay.style.display='none';
+        inQuestion=false;
+        currentBall++;
+        if(currentBall>=5){ endGame(); }
+      },2500);
+    };
+    optDiv.appendChild(btn);
+  });
+}
+
+function endGame(){
+  overlay.style.display='flex';
+  card.innerHTML=`
+    <div class="emoji">🎉</div>
+    <h1>Chúc mừng!</h1>
+    <p>Bạn đạt ${score} điểm</p>
+    <button onclick="restartGame()">🔄 Bắt đầu lại</button>
+  `;
+  gameOver = true;
+}
+
+function restartGame(){
+  overlay.style.display='none';
+  score = 0;
+  currentBall = 0;
+  gameOver = false;
+  inQuestion = false;
+  initBalls();
+  player.x = canvas.width/2;
+  player.y = canvas.height-120;
+  confetti = [];
+}
+
+function loop(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  drawBasket(player.x, player.y, player.size);
+
+  if(!gameOver && !inQuestion){
+    if(keys['ArrowLeft']||keys['a']) player.x-=player.speed;
+    if(keys['ArrowRight']||keys['d']) player.x+=player.speed;
+    if(keys['ArrowUp']||keys['w']) player.y-=player.speed;
+    if(keys['ArrowDown']||keys['s']) player.y+=player.speed;
+
+    if(player.x<player.r) player.x=player.r;
+    if(player.x>canvas.width-player.r) player.x=canvas.width-player.r;
+    if(player.y<player.r) player.y=player.r;
+    if(player.y>canvas.height-player.r) player.y=canvas.height-player.r;
+
+    if(currentBall<5){
+      const ball=balls[currentBall];
+      if(ball.active){
+        ball.y+=3; // rơi nhanh hơn chút
+        ctx.font = `${ball.r*1.8}px serif`;
+        ctx.textAlign="center";
+        ctx.fillText("🎁", ball.x, ball.y);
+        const dx=ball.x-player.x, dy=ball.y-player.y;
+        if(Math.hypot(dx,dy)<ball.r+player.r){
+          ball.active=false;
+          showQuestion(currentBall);
+        }
+      }
+    }
+  }
+
+  if(confetti.length>0) drawConfetti();
+
+  requestAnimationFrame(loop);
+}
+loop();
+</script>
+</body>
+</html>
+
+
+
